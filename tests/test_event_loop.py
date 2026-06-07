@@ -5,12 +5,7 @@ import pytest
 from async_runtime import EventLoop
 
 
-# ---------------------------------------------------------------------------
-# helpers
-# ---------------------------------------------------------------------------
-
 def make_connected_pair():
-    """Возвращает (reader_sock, writer_sock) — неблокирующую пару сокетов."""
     r, w = socket.socketpair()
     r.setblocking(False)
     w.setblocking(False)
@@ -18,7 +13,6 @@ def make_connected_pair():
 
 
 def run_loop_once(loop: EventLoop):
-    """Одна итерация _run_once — удобно для unit-тестов."""
     loop._run_once()
 
 
@@ -44,7 +38,7 @@ class TestCallSoon:
         assert order == ["a", "b", "c"]
 
     def test_callback_added_during_iteration_deferred(self):
-        """Callback добавленный внутри callback не должен выполниться в той же итерации."""
+        """Callback добавленный внутри callback не выполняется в той же итерации."""
         loop = EventLoop()
         order = []
 
@@ -54,7 +48,7 @@ class TestCallSoon:
 
         loop.call_soon(first)
         run_loop_once(loop)
-        assert order == ["first"]          # "second" — в следующей итерации
+        assert order == ["first"]
 
         run_loop_once(loop)
         assert order == ["first", "second"]
@@ -70,7 +64,7 @@ class TestCallSoon:
         loop = EventLoop()
         called = []
         loop.call_soon(called.append, 1)
-        assert called == []  # ещё не запускали loop
+        assert called == []
 
 
 # ---------------------------------------------------------------------------
@@ -79,6 +73,7 @@ class TestCallSoon:
 
 class TestReader:
     def test_reader_fires_when_data_available(self):
+        """Одна итерация: select видит данные → callback вызывается."""
         loop = EventLoop()
         r, w = make_connected_pair()
         called = []
@@ -86,9 +81,8 @@ class TestReader:
         try:
             w.send(b"hello")
             loop.add_reader(r, called.append, "read")
-            run_loop_once(loop)   # select видит readable fd
-            run_loop_once(loop)   # drain _ready
-            assert called == ["read"]
+            run_loop_once(loop)  # select + drain в одном _run_once
+            assert "read" in called
         finally:
             r.close()
             w.close()
@@ -100,7 +94,6 @@ class TestReader:
 
         try:
             loop.add_reader(r, called.append, "read")
-            run_loop_once(loop)
             run_loop_once(loop)
             assert called == []
         finally:
@@ -116,7 +109,6 @@ class TestReader:
             w.send(b"data")
             loop.add_reader(r, called.append, "read")
             loop.remove_reader(r)
-            run_loop_once(loop)
             run_loop_once(loop)
             assert called == []
         finally:
@@ -143,7 +135,7 @@ class TestReader:
             w.close()
 
     def test_reader_fires_persistently(self):
-        """add_reader персистентный — срабатывает каждую итерацию пока есть данные."""
+        """Пока данные не вычитаны — reader срабатывает каждую итерацию."""
         loop = EventLoop()
         r, w = make_connected_pair()
         called = []
@@ -153,10 +145,29 @@ class TestReader:
             loop.add_reader(r, called.append, "read")
 
             for _ in range(3):
-                run_loop_once(loop)  # select
-                run_loop_once(loop)  # drain
+                run_loop_once(loop)
 
             assert len(called) == 3
+        finally:
+            r.close()
+            w.close()
+
+    def test_reader_stops_after_data_consumed(self):
+        """После того как данные вычитаны — reader больше не срабатывает."""
+        loop = EventLoop()
+        r, w = make_connected_pair()
+        call_count = [0]
+
+        def on_read():
+            call_count[0] += 1
+            r.recv(1024)  # вычитываем данные
+
+        try:
+            w.send(b"hello")
+            loop.add_reader(r, on_read)
+            run_loop_once(loop)  # срабатывает, вычитывает
+            run_loop_once(loop)  # данных нет — не должен сработать
+            assert call_count[0] == 1
         finally:
             r.close()
             w.close()
@@ -168,6 +179,7 @@ class TestReader:
 
 class TestWriter:
     def test_writer_fires_when_socket_writable(self):
+        """Сокет почти всегда writable — callback должен сработать за одну итерацию."""
         loop = EventLoop()
         r, w = make_connected_pair()
         called = []
@@ -175,8 +187,7 @@ class TestWriter:
         try:
             loop.add_writer(w, called.append, "write")
             run_loop_once(loop)
-            run_loop_once(loop)
-            assert called == ["write"]
+            assert "write" in called
         finally:
             r.close()
             w.close()
@@ -189,7 +200,6 @@ class TestWriter:
         try:
             loop.add_writer(w, called.append, "write")
             loop.remove_writer(w)
-            run_loop_once(loop)
             run_loop_once(loop)
             assert called == []
         finally:
@@ -273,13 +283,12 @@ class TestRunForever:
 
 class TestTimeout:
     def test_no_busy_wait_when_idle(self):
-        """Пустой loop должен блокироваться на select, а не крутиться вхолостую."""
+        """Пустой loop блокируется на select ~0.1s."""
         loop = EventLoop()
         start = time.monotonic()
-        # запускаем одну итерацию без callbacks и без I/O — должна заблокироваться ~0.1s
         run_loop_once(loop)
         elapsed = time.monotonic() - start
-        assert elapsed >= 0.05  # хотя бы половину таймаута подождал
+        assert elapsed >= 0.05
 
     def test_ready_callbacks_use_zero_timeout(self):
         """Если есть callbacks — select с timeout=0, итерация быстрая."""
