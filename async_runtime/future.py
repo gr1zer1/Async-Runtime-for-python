@@ -59,7 +59,7 @@ class Future:
                 raise ValueError("Future is already cancelled")
             
             case FutureStatus._PENDING:
-                raise ValueError("Future dont done")
+                raise ValueError("Future not done")
 
 
     def done(self) -> bool:
