@@ -1,6 +1,6 @@
 from .event_loop import EventLoop
 from .future import Future, FutureStatus
-from task import Task
+from .task import Task
 
 
 all = [

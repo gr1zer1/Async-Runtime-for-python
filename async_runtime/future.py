@@ -1,6 +1,10 @@
+from __future__ import annotations
 from enum import Enum
-from async_runtime import EventLoop
-from typing import Callable
+from typing import Callable, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from async_runtime import EventLoop
+
 
 
 _MISSING = object()

@@ -1,7 +1,7 @@
 import select
 from collections import deque
 from typing import Callable
-from task import Task
+from .task import Task
 
 
 class EventLoop:

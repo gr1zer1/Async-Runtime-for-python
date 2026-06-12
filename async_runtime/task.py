@@ -1,4 +1,4 @@
-from future import Future, FutureStatus
+from .future import Future, FutureStatus
 
 
 class Task(Future):
