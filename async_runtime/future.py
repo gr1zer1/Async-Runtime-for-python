@@ -84,6 +84,13 @@ class Future:
         if not self.done():
             yield self
         return self.result()
+
+
+    @property
+    def exception(self):
+        if self._status == FutureStatus._PENDING:
+            raise ValueError("Future is not done")
+        return self._exception
         
 
 
