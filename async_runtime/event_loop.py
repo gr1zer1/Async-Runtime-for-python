@@ -1,6 +1,7 @@
 import select
 from collections import deque
 from typing import Callable
+from task import Task
 
 
 class EventLoop:
@@ -78,3 +79,10 @@ class EventLoop:
 
     def stop(self):
         self._stopped = True
+
+
+    def run_until_complete(self, coro):
+        task = Task(self, coro)
+        task.add_done_callback(lambda _: self.stop())
+        self.run_forever()
+        return task.result()
