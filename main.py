@@ -1,8 +1,11 @@
 from async_runtime import EventLoop
 
+async def inner():
+    return 10
+
 async def main():
-    return 42
+    result = await inner()
+    return result * 2
 
 loop = EventLoop()
-result = loop.run_until_complete(main())
-print(result)  # 42
+print(loop.run_until_complete(main()))
